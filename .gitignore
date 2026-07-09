@@ -1,0 +1,28 @@
+# API 密钥配置（敏感信息，必须屏蔽）
+config.ini
+
+# 运行时生成的数据（自动创建，无需版本控制）
+data/pdfs/
+data/*.log
+data/fab_paper_log.txt
+data/fab_paper_log_latest.json
+data/fab_paper_log_watch_latest.json
+data/qubit_paper_log.txt
+data/qubit_paper_log_latest.json
+data/sent_papers.json
+
+# IDE 配置目录
+.claude/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
