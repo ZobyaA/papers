@@ -17,7 +17,7 @@ pip install -r requirements.txt
 # 3. 配置（必须修改！见下文详细说明）
 #    - config.ini: 填入你的 DeepSeek/OpenAI API Key
 #    - push_papers.py: 填入你的钉钉机器人 Webhook 和 Secret
-#    - fetch.bat / push.bat: 修改 Python 路径和项目目录
+#    - 确保 conda 在系统 PATH 中（定时任务 .bat 脚本需要）
 
 # 4. 首次运行（测试检索）
 python retrieve_qubit.py --days 1
@@ -39,7 +39,7 @@ python push_papers.py --dry-run
 - [第3步：配置系统（必须修改）](#第3步配置系统必须修改)
   - [3.1 配置 API 密钥](#31-配置-api-密钥)
   - [3.2 配置钉钉机器人](#32-配置钉钉机器人)
-  - [3.3 配置批处理脚本路径](#33-配置批处理脚本路径)
+  - [3.3 批处理脚本（无需手动修改路径）](#33-批处理脚本无需手动修改路径)
 - [第4步：首次运行测试](#第4步首次运行测试)
 - [第5步：设置定时任务](#第5步设置定时任务)
 - [使用说明](#使用说明)
@@ -140,11 +140,24 @@ DINGTALK_SECRET = "SEC你的机器人secret"
 3. 填写机器人名称，开启「加签」（必须开启）
 4. 复制 Webhook 和 Secret
 
-### 3.3 配置批处理脚本路径
+### 3.3 批处理脚本（无需手动修改路径）
 
 **文件位置**：`fetch.bat` 和 `push.bat`
 
-**修改内容**：替换为你的 Python 解释器路径和项目目录
+脚本使用 `%~dp0` 自动推导项目根目录，使用 `conda run -n quantum python` 调用 Python 解释器，**换机即用，无需修改任何路径**。
+
+**前置条件（换机使用唯一要求）**：
+
+1. **conda 已安装并在 PATH 中** — 安装 Miniconda 时勾选"Add to PATH"，或手动将 conda 目录加入系统环境变量
+2. **conda 环境名为 `quantum`** — 运行 `conda env list` 确认 `quantum` 环境存在
+3. **项目目录可任意放置** — 脚本使用 `%~dp0` 自动定位，不依赖绝对路径
+
+验证 conda 是否可用（在新终端中执行）：
+
+```bash
+conda run -n quantum python --version
+# 预期输出: Python 3.11.x
+```
 
 #### fetch.bat（检索脚本）
 
@@ -152,19 +165,18 @@ DINGTALK_SECRET = "SEC你的机器人secret"
 @echo off
 chcp 65001 >nul
 set ARXIV_SCHEDULED=1
-set PYTHON=C:\Users\你的用户名\miniconda3\envs\quantum\python.exe  # 修改这里
-set PROJECT_DIR=C:\Users\你的用户名\Desktop\arxiv-paper-monitor      # 修改这里
 
-cd /d "%PROJECT_DIR%"
+REM === 自动推导项目根目录（%~dp0 = 此脚本所在目录，.. 即项目根） ===
+cd /d "%~dp0.."
 
 echo [%date% %time%] === fetch started (delay 1h) ===
 timeout /t 3600 /nobreak > nul
 
 echo [%date% %time%] [NEW] retrieve_qubit...
-%PYTHON% papers\retrieve_qubit.py --days 3
+conda run -n quantum python papers\retrieve_qubit.py --days 3
 
 echo [%date% %time%] [NEW] retrieve_fab...
-%PYTHON% papers\retrieve_fab.py --days 3 --max-results 999
+conda run -n quantum python papers\retrieve_fab.py --days 3 --max-results 999
 
 echo [%date% %time%] === fetch done ===
 ```
@@ -175,15 +187,15 @@ echo [%date% %time%] === fetch done ===
 @echo off
 chcp 65001 >nul
 
-cd /d C:\Users\你的用户名\Desktop\arxiv-paper-monitor      # 修改这里
-set PYTHON=C:\Users\你的用户名\miniconda3\envs\quantum\python.exe  # 修改这里
+REM === 自动推导项目根目录 ===
+cd /d "%~dp0.."
 
 echo [%date% %time%] push start >> papers\data\push.log 2>nul
-%PYTHON% papers\push_papers.py >> papers\data\push.log 2>&1
+conda run -n quantum python papers\push_papers.py >> papers\data\push.log 2>&1
 echo [%date% %time%] push done (exit %errorlevel%) >> papers\data\push.log 2>nul
 ```
 
-> **注意**：如果你使用系统 Python 而非 Conda，`PYTHON` 路径改为 `python` 即可。
+> **备选方案**：如果不希望依赖 `conda run`，可改用系统 Python：将 `conda run -n quantum python` 替换为 `python`（需确保 `quantum` 环境已激活或已安装所需依赖）。
 
 ---
 
@@ -241,7 +253,7 @@ python push_papers.py
 3. 名称：`arxiv-fetch`，描述：`arXiv论文检索`
 4. 触发器：每天，时间选择 8:00（建议早于推送时间）
 5. 操作：启动程序
-6. 程序或脚本：`fetch.bat` 的完整路径（如 `C:\Users\xxx\Desktop\arxiv-paper-monitor\papers\fetch.bat`）
+6. 程序或脚本：`fetch.bat` 的完整路径（如 `C:\Users\<你的用户名>\Desktop\ClaudeCode\papers\fetch.bat`）
 7. 完成
 
 ### 5.2 创建推送任务
@@ -250,7 +262,7 @@ python push_papers.py
 2. 名称：`arxiv-push`，描述：`arXiv论文推送`
 3. 触发器：每天，时间选择 9:30（检索完成后推送）
 4. 操作：启动程序
-5. 程序或脚本：`push.bat` 的完整路径（如 `C:\Users\xxx\Desktop\arxiv-paper-monitor\papers\push.bat`）
+5. 程序或脚本：`push.bat` 的完整路径（如 `C:\Users\<你的用户名>\Desktop\ClaudeCode\papers\push.bat`）
 6. 完成
 
 > **注意**：`fetch.bat` 内置了 1 小时延迟，以错开 arXiv 服务器高峰期。如果不需要延迟，删除 `timeout /t 3600 /nobreak > nul` 行。
