@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 # 3. 配置（必须修改！见下文详细说明）
 #    - config.ini: 填入你的 DeepSeek/OpenAI API Key
-#    - push_papers.py: 填入你的钉钉机器人 Webhook 和 Secret
+#    - 环境变量: 设置钉钉机器人 Webhook 和加签 Secret（见第 3.2 节）
 #    - 确保 conda 在系统 PATH 中（定时任务 .bat 脚本需要）
 
 # 4. 首次运行（测试检索）
@@ -120,18 +120,22 @@ gemini = AQ.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx     # 可选
 
 ### 3.2 配置钉钉机器人
 
-**文件位置**：`push_papers.py` 第 17-18 行
+推送时从环境变量读取 `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET`，两项都必须设置（示例中的 `****` 仅为占位符，运行前替换为真实值），机器人须开启「加签」。不要把真实值写入代码、文档或提交到 Git。`--dry-run` 和 `--list-domains` 无需配置。程序不会自动读取 `.env` 文件；定时任务也必须继承这两个环境变量。
 
-**修改内容**：替换为你的钉钉机器人 Webhook 和 Secret
+PowerShell（仅当前窗口）示例：
 
-```python
-# 当前代码（需要修改！）
-DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=****"
-DINGTALK_SECRET = "****"
+```powershell
+$env:DINGTALK_WEBHOOK = 'https://oapi.dingtalk.com/robot/send?access_token=****'
+$env:DINGTALK_SECRET = '****'
+python push_papers.py
+```
 
-# 修改为你的机器人配置
-DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=你的机器人token"
-DINGTALK_SECRET = "SEC你的机器人secret"
+Linux/macOS shell（仅当前终端）示例：
+
+```bash
+export DINGTALK_WEBHOOK='https://oapi.dingtalk.com/robot/send?access_token=****'
+export DINGTALK_SECRET='****'
+python push_papers.py
 ```
 
 **获取方式**：
@@ -426,7 +430,7 @@ papers/
 ├── common.py                      # 核心引擎：arXiv客户端、PDF处理、AI调用、评分、钉钉推送
 ├── retrieve_fab.py                # 芯片加工工艺管线（Q1~Q6 rubric评分）
 ├── retrieve_qubit.py              # 超导量子器件管线（多维rubric评分）
-├── push_papers.py                 # 统一推送脚本（多领域汇总→钉钉）【需修改】
+├── push_papers.py                 # 统一推送脚本（多领域汇总→钉钉）
 ├── fetch.bat                      # Windows定时任务：检索脚本【需修改】
 ├── push.bat                       # Windows定时任务：推送脚本【需修改】
 ├── config.ini.example             # API密钥配置模板（复制到 config.ini 使用）
@@ -438,7 +442,7 @@ papers/
 ├── data/
 │   ├── author_keywords.json       # 量子器件作者关键词积累（预置）
 │   ├── fab_author_keywords.json   # 芯片工艺作者关键词积累（预置）
-│   ├── favorites.json             # 收藏论文列表（预置）
+│   ├── favorites.json             # 收藏论文列表（运行时生成，忽略提交）
 │   ├── sent_papers.json           # 已推送论文去重记录（预置）
 │   ├── pdfs/                      # PDF文件缓存（运行时自动创建，.gitignore屏蔽）
 │   ├── fab_paper_log.txt          # 芯片工艺检索日志（运行时生成，.gitignore屏蔽）
@@ -461,7 +465,7 @@ papers/
 
 > **说明**：
 > - `config.ini`：用户手动创建（从 `config.ini.example` 复制），**不会上传到 GitHub**（`.gitignore` 已屏蔽）
-> - `data/` 目录下标记为「运行时生成」的文件在首次运行检索脚本后自动创建，也被 `.gitignore` 屏蔽
+> - `data/` 目录下标记为「运行时生成」的文件在首次运行相应功能后自动创建，也被 `.gitignore` 屏蔽
 
 ---
 
@@ -486,7 +490,7 @@ deepseek = sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 3. 网络问题
 
 **解决**：
-1. 检查 `push_papers.py` 第 17-18 行的 `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET` 是否正确
+1. 检查当前进程或定时任务中是否同时设置 `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET`，且值有效
 2. 在钉钉群聊的机器人设置中确认「加签」已开启
 3. 查看 `data/push.log` 中的错误信息
 

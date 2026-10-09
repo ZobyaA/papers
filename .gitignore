@@ -1,5 +1,7 @@
 # API 密钥配置（敏感信息，必须屏蔽）
 config.ini
+.env
+.env.*
 
 # 运行时生成的数据（自动创建，无需版本控制）
 data/pdfs/
@@ -10,6 +12,7 @@ data/fab_paper_log_watch_latest.json
 data/qubit_paper_log.txt
 data/qubit_paper_log_latest.json
 data/sent_papers.json
+data/favorites.json
 
 # IDE 配置目录
 .claude/

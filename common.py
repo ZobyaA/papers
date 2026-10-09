@@ -8,7 +8,7 @@ import json
 import hmac
 import hashlib
 import base64
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote, quote_plus, urlsplit, parse_qs
 from typing import List, Dict, TypedDict
 import os
 import configparser
@@ -994,6 +994,33 @@ def prefilter_papers_by_category(
 #  钉钉通知
 # =============================================================================
 
+class DingTalkConfigError(ValueError):
+    """机器人配置缺失或无效；消息只包含固定安全提示。"""
+
+
+def load_dingtalk_credentials():
+    """从环境变量读取带加签的钉钉机器人配置。错误信息不包含凭据。"""
+    webhook = os.environ.get(
+        'DINGTALK_WEBHOOK', 'https://oapi.dingtalk.com/robot/send?access_token=****'
+    ).strip()
+    secret = os.environ.get('DINGTALK_SECRET', '****').strip()
+    if not webhook or not secret or '****' in webhook or secret == '****':
+        raise DingTalkConfigError('缺少 DINGTALK_WEBHOOK 或 DINGTALK_SECRET 环境变量')
+
+    try:
+        parts = urlsplit(webhook)
+        tokens = parse_qs(parts.query).get('access_token', [])
+    except ValueError:
+        raise DingTalkConfigError('钉钉机器人环境变量格式无效，请检查 Webhook 和加签 Secret') from None
+    if (parts.scheme != 'https' or parts.netloc != 'oapi.dingtalk.com'
+            or parts.path != '/robot/send' or parts.fragment
+            or len(tokens) != 1 or not tokens[0] or '*' in tokens[0]
+            or not secret.startswith('SEC') or len(secret) <= 3
+            or any(char.isspace() or char == '*' for char in secret)):
+        raise DingTalkConfigError('钉钉机器人环境变量格式无效，请检查 Webhook 和加签 Secret')
+    return webhook, secret
+
+
 class DingTalkRobot:
     def __init__(self, webhook, secret):
         self.webhook = webhook
@@ -1008,26 +1035,28 @@ class DingTalkRobot:
         return sign
 
     def send_markdown(self, title, text):
-        timestamp = str(round(time.time() * 1000))
-        sign = self._generate_sign(timestamp)
-
-        url = f"{self.webhook}&timestamp={timestamp}&sign={sign}"
-
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "msgtype": "markdown",
-            "markdown": {
-                "title": title,
-                "text": text
-            }
-        }
-
         try:
+            timestamp = str(round(time.time() * 1000))
+            sign = self._generate_sign(timestamp)
+            url = f"{self.webhook}&timestamp={timestamp}&sign={sign}"
+            headers = {"Content-Type": "application/json"}
+            data = {
+                "msgtype": "markdown",
+                "markdown": {"title": title, "text": text}
+            }
             response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
-            return response.json()
-        except Exception as e:
-            print(f"发送消息时出错: {e}")
-            return {"errcode": -1, "errmsg": str(e)}
+            response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict):
+                raise ValueError('unexpected response')
+            code = result.get('errcode')
+            if not isinstance(code, int) or isinstance(code, bool):
+                raise ValueError('unexpected response')
+            # 钉钉返回的 errmsg 可能包含请求 URL，不能直接记录或返回。
+            return {"errcode": code, "errmsg": "ok" if code == 0 else "钉钉拒绝请求，请检查机器人配置"}
+        except Exception:
+            # requests 异常可能携带含 access_token 和 sign 的完整 URL。
+            return {"errcode": -1, "errmsg": "钉钉请求失败，请检查网络或响应"}
 
 
 def generate_markdown_content(papers, domain_label, keywords, requirement="", ai_service="deepseek"):
@@ -2415,11 +2444,13 @@ def run_retrieval_pipeline(
         if push_papers and push_tier:
             markdown_content = generate_markdown_content(push_tier, domain_label, all_keywords, requirement, ai_service)
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 正在发送到钉钉...")
-            robot = DingTalkRobot(
-                "https://oapi.dingtalk.com/robot/send?access_token=****",
-                "****"
-            )
-            response = robot.send_markdown(f"🔬 arXiv论文更新 — {domain_label}", markdown_content)
+            try:
+                robot = DingTalkRobot(*load_dingtalk_credentials())
+                response = robot.send_markdown(f"🔬 arXiv论文更新 — {domain_label}", markdown_content)
+            except DingTalkConfigError as e:
+                response = {"errcode": -1, "errmsg": str(e)}
+            except Exception:
+                response = {"errcode": -1, "errmsg": "钉钉推送异常"}
 
         # 提取高评分论文的通讯作者（仅推送线）
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 正在提取高评分论文的通讯作者...")
@@ -2433,7 +2464,7 @@ def run_retrieval_pipeline(
 
     if response:
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 推送结果: {response}")
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 最终 🟢推送{len([p for p in ai_papers if p.get('relevance_score', 0) >= (push_score or min_score)])}篇 🟡关注{len([p for p in ai_papers if min_score <= p.get('relevance_score', 0) < (push_score or min_score)])}篇")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 最终 🟢推送线{len([p for p in ai_papers if p.get('relevance_score', 0) >= (push_score or min_score)])}篇 🟡关注{len([p for p in ai_papers if min_score <= p.get('relevance_score', 0) < (push_score or min_score)])}篇")
 
     # 恢复 stdout 并关闭日志
     sys.stdout = original_stdout

@@ -8,14 +8,8 @@ arXiv 论文统一推送脚本
 import os
 import sys
 from datetime import datetime
-from common import (DingTalkRobot, generate_markdown_content, load_latest_json,
+from common import (DingTalkRobot, DingTalkConfigError, load_dingtalk_credentials, generate_markdown_content, load_latest_json,
                     mark_papers_sent, load_sent_papers, deduplicate_papers)
-
-# =============================================================================
-#  钉钉机器人配置
-# =============================================================================
-DINGTALK_WEBHOOK = "机器人地址"
-DINGTALK_SECRET = "api-key"
 
 # =============================================================================
 #  推送日志
@@ -147,9 +141,14 @@ def push(ai_service: str = "deepseek", dry_run: bool = False):
         return
 
     try:
-        robot = DingTalkRobot(DINGTALK_WEBHOOK, DINGTALK_SECRET)
-    except Exception as e:
+        credentials = load_dingtalk_credentials()
+    except DingTalkConfigError as e:
         _push_log(f"ERROR 创建钉钉机器人失败: {e}")
+        return None
+    try:
+        robot = DingTalkRobot(*credentials)
+    except Exception:
+        _push_log("ERROR 创建钉钉机器人失败")
         return None
 
     responses = []
@@ -168,9 +167,9 @@ def push(ai_service: str = "deepseek", dry_run: bool = False):
                 _push_log(f"[{label}] 推送成功: {len(papers)} 篇 → {titles}")
             else:
                 _push_log(f"[{label}] 推送失败: errcode={resp.get('errcode')} errmsg={resp.get('errmsg')}")
-        except Exception as e:
-            _push_log(f"[{label}] 推送异常: {e}")
-            responses.append((label, {"errcode": -1, "errmsg": str(e)}))
+        except Exception:
+            _push_log(f"[{label}] 推送异常，请检查生成内容或钉钉服务")
+            responses.append((label, {"errcode": -1, "errmsg": "推送异常"}))
 
     _push_log("推送任务完成")
     return responses
