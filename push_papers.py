@@ -14,8 +14,8 @@ from common import (DingTalkRobot, generate_markdown_content, load_latest_json,
 # =============================================================================
 #  钉钉机器人配置
 # =============================================================================
-DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=****"
-DINGTALK_SECRET = "****"
+DINGTALK_WEBHOOK = "机器人地址"
+DINGTALK_SECRET = "api-key"
 
 # =============================================================================
 #  推送日志
